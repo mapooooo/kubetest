@@ -1,0 +1,15 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kubetest-dev
+  namespace: flux-system
+spec:
+  interval: 1m
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: kubetest-git
+  path: ./k8s/overlays/dev
+  wait: true
+  timeout: 5m
+  targetNamespace: kubetest
