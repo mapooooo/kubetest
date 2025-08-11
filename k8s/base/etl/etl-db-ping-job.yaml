@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: etl-db-ping
+  labels:
+    app: etl
+    job-type: db-ping
+spec:
+  template:
+    metadata:
+      labels:
+        app: etl
+        job-type: db-ping
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-ping
+          image: python:3.11-slim
+          command: ["python", "-c"]
+          args:
+            - |
+              import os, time
+              print("Starting DB ping placeholder...")
+              server=os.getenv('AZURE_SQL_SERVER')
+              db=os.getenv('AZURE_SQL_DATABASE')
+              user=os.getenv('AZURE_SQL_USERNAME')
+              print(f"Would connect to server={server}, db={db}, as user={user}")
+              time.sleep(5)
+              print("Done.")
+          env:
+            - name: AZURE_SQL_SERVER
+              valueFrom:
+                secretKeyRef:
+                  name: azure-sql-secret
+                  key: AZURE_SQL_SERVER
+            - name: AZURE_SQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: azure-sql-secret
+                  key: AZURE_SQL_DATABASE
+            - name: AZURE_SQL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: azure-sql-secret
+                  key: AZURE_SQL_USERNAME
+            - name: AZURE_SQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: azure-sql-secret
+                  key: AZURE_SQL_PASSWORD
+  backoffLimit: 0

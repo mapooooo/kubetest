@@ -6,6 +6,7 @@ resources:
   - ../../base
   - secrets/supabase-secret.yaml
   - secrets/rabbitmq-secret.yaml
+  - secrets/azure-sql-secret.yaml
 patches:
   - path: patch-backend.yaml
   - path: patch-frontend.yaml

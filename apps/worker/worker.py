@@ -2,8 +2,9 @@ import os
 import json
 import time
 import logging
-import pika
 from supabase import create_client, Client
+from faststream import FastStream
+from faststream.rabbit import RabbitBroker
 
 # Optionally import local ETL
 from pathlib import Path
@@ -40,15 +41,14 @@ def run_etl(payload: dict) -> dict:
     return {"status": "ok", "note": "no etl module found"}
 
 
-def on_message(channel, method, properties, body):
-    try:
-        payload = json.loads(body.decode("utf-8")) if body else {}
-    except Exception:
-        payload = {}
+broker = RabbitBroker(RABBITMQ_URL)
+app = FastStream(broker)
 
+
+@broker.subscriber(QUEUE_NAME)
+async def handle_job(payload: dict):
     logger.info(f"Received message: {payload}")
     result = run_etl(payload)
-
     if supabase:
         try:
             supabase.table("etl_runs").insert({
@@ -60,19 +60,10 @@ def on_message(channel, method, properties, body):
         except Exception as e:
             logger.warning(f"Failed to insert into Supabase: {e}")
 
-    channel.basic_ack(delivery_tag=method.delivery_tag)
-    logger.info("Message processed and acknowledged")
-
 
 def main():
-    params = pika.URLParameters(RABBITMQ_URL)
-    connection = pika.BlockingConnection(params)
-    channel = connection.channel()
-    channel.queue_declare(queue=QUEUE_NAME, durable=True)
-    channel.basic_qos(prefetch_count=1)
-    channel.basic_consume(queue=QUEUE_NAME, on_message_callback=on_message)
-    logger.info(f"Worker listening on {QUEUE_NAME} ...")
-    channel.start_consuming()
+    import asyncio
+    asyncio.run(app.run())
 
 
 if __name__ == "__main__":

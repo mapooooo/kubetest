@@ -1,8 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-import json
-import pika
+from faststream.rabbit import RabbitBroker
 from supabase import create_client, Client
 
 app = FastAPI()
@@ -15,6 +14,7 @@ if SUPABASE_URL and SUPABASE_ANON_KEY:
 
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "")
 QUEUE_NAME = os.getenv("QUEUE_NAME", "jobs")
+broker: RabbitBroker | None = RabbitBroker(RABBITMQ_URL) if RABBITMQ_URL else None
 
 @app.get("/health")
 def health():
@@ -27,23 +27,22 @@ def list_items():
     data = supabase.table("items").select("*").limit(10).execute()
     return {"items": data.data}
 
+@app.on_event("startup")
+async def startup_broker():
+    if broker is not None:
+        await broker.connect()
+
+@app.on_event("shutdown")
+async def shutdown_broker():
+    if broker is not None:
+        await broker.close()
+
 @app.post("/jobs")
-def create_job(payload: dict):
-    if not RABBITMQ_URL:
+async def create_job(payload: dict):
+    if broker is None:
         return JSONResponse({"status": "error", "message": "RabbitMQ not configured"}, status_code=400)
     try:
-        params = pika.URLParameters(RABBITMQ_URL)
-        connection = pika.BlockingConnection(params)
-        channel = connection.channel()
-        channel.queue_declare(queue=QUEUE_NAME, durable=True)
-        body = json.dumps(payload).encode("utf-8")
-        channel.basic_publish(
-            exchange="",
-            routing_key=QUEUE_NAME,
-            body=body,
-            properties=pika.BasicProperties(delivery_mode=2)
-        )
-        connection.close()
+        await broker.publish(payload, queue=QUEUE_NAME)
         return {"status": "queued", "queue": QUEUE_NAME}
     except Exception as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
